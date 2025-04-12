@@ -1,11 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import date, datetime
-
-# Initialize session state for saved results if it doesn't exist
-if 'saved_results' not in st.session_state:
-    st.session_state.saved_results = []
+from datetime import date
 
 # Set page configuration with a Dutch title
 st.set_page_config(
@@ -39,6 +35,10 @@ st.markdown("""
 # Define the file path for the Excel file
 file_path = "lijst.xlsx"
 
+# Initialize session state for saved rows if it doesn't exist
+if 'saved_rows' not in st.session_state:
+    st.session_state.saved_rows = pd.DataFrame()
+
 # Function to load the data
 @st.cache_data
 def load_data(file_path):
@@ -59,6 +59,9 @@ def load_data(file_path):
     except Exception as e:
         st.error(f"Fout bij het laden van Excel-bestand: {e}")
         return None
+
+# Create tabs
+tab1, tab2 = st.tabs(["Zoeken", "Opgeslagen Resultaten"])
 
 # Check if the file exists
 if os.path.exists(file_path):
@@ -154,101 +157,147 @@ if os.path.exists(file_path):
                                 if st.button("Reset Filters", type="primary", use_container_width=True):
                                     st.rerun()
 
-        # MAIN PAGE: Display results here
-        st.title("DCSPH Gegevens Viewer")
-        
-        # Check if there are saved results without any current filters
-        if not (selected_omschrijving and selected_pathologie and selected_lichaamslocalisatie) and st.session_state.saved_results:
-            st.markdown("## Opgeslagen Resultaten")
+        # TAB 1: Search and Results
+        with tab1:
+            st.title("DCSPH Gegevens Viewer")
             
-            # Create a table with saved search criteria
-            saved_data = []
-            for i, result in enumerate(st.session_state.saved_results):
-                saved_data.append({
-                    "Nummer": i+1,
-                    "Tijd": result["timestamp"],
-                    "Datum": result["date"],
-                    "Omschrijving": result["omschrijving"],
-                    "Pathologie": result["pathologie"],
-                    "Lichaamslocalisatie": result["lichaamslocalisatie"],
-                    "Aantal Records": result["count"]
-                })
-            
-            saved_df = pd.DataFrame(saved_data)
-            st.dataframe(saved_df, use_container_width=True, hide_index=True)
-            
-            # Allow viewing a specific saved result
-            if len(st.session_state.saved_results) > 0:
-                selected_result_index = st.selectbox(
-                    "Selecteer een opgeslagen resultaat om te bekijken:",
-                    options=range(1, len(st.session_state.saved_results) + 1),
-                    format_func=lambda x: f"Resultaat {x} - {st.session_state.saved_results[x-1]['timestamp']} - {st.session_state.saved_results[x-1]['omschrijving']}"
-                )
+            # Check if all filters are selected to display results
+            if selected_omschrijving and selected_pathologie and selected_lichaamslocalisatie:
+                # Apply all filters to get final results
+                final_filtered_df = df[
+                    (df[omschrijving_col] == selected_omschrijving) & 
+                    (df[pathologie_text_col] == selected_pathologie) &
+                    (df[lichaamslocalisatie_text_col] == selected_lichaamslocalisatie)
+                ]
                 
-                if selected_result_index:
-                    # Display the selected saved result
-                    result_data = st.session_state.saved_results[selected_result_index-1]["data"]
-                    
-                    st.markdown(f"### Resultaat {selected_result_index} Details")
-                    st.markdown(f"**Omschrijving:** {st.session_state.saved_results[selected_result_index-1]['omschrijving']}")
-                    st.markdown(f"**Pathologie:** {st.session_state.saved_results[selected_result_index-1]['pathologie']}")
-                    st.markdown(f"**Lichaamslocalisatie:** {st.session_state.saved_results[selected_result_index-1]['lichaamslocalisatie']}")
-                    
-                    # Display the data
-                    st.dataframe(result_data, use_container_width=True, hide_index=True, height=400)
-            
-            # Add option to clear saved results
-            if st.button("Opgeslagen Resultaten Wissen", type="secondary"):
-                st.session_state.saved_results = []
-                st.rerun()
-            
-        # Check if all filters are selected to display results
-        elif selected_omschrijving and selected_pathologie and selected_lichaamslocalisatie:
-            # Apply all filters to get final results
-            final_filtered_df = df[
-                (df[omschrijving_col] == selected_omschrijving) & 
-                (df[pathologie_text_col] == selected_pathologie) &
-                (df[lichaamslocalisatie_text_col] == selected_lichaamslocalisatie)
-            ]
-            
-            # Display filters that were applied
-            st.markdown("## Toegepaste Filters")
-            
-            filter_col1, filter_col2, filter_col3 = st.columns(3)
-            with filter_col1:
-                st.markdown(f"**Omschrijving:** {selected_omschrijving}")
-            with filter_col2:
-                st.markdown(f"**Pathologie:** {selected_pathologie}")
-            with filter_col3:
-                st.markdown(f"**Lichaamslocalisatie:** {selected_lichaamslocalisatie}")
-            
-            st.markdown("---")
-            
-            # Display results section
-            st.markdown("## Resultaten")
-            
-            if not final_filtered_df.empty:
-                # Display count
-                st.markdown(f"**Aantal gevonden records:** {len(final_filtered_df)}")
+                # Display filters that were applied
+                st.markdown("## Toegepaste Filters")
                 
-                # Get relevant information columns
-                # First check what columns are available as relevant information
+                filter_col1, filter_col2, filter_col3 = st.columns(3)
+                with filter_col1:
+                    st.markdown(f"**Omschrijving:** {selected_omschrijving}")
+                with filter_col2:
+                    st.markdown(f"**Pathologie:** {selected_pathologie}")
+                with filter_col3:
+                    st.markdown(f"**Lichaamslocalisatie:** {selected_lichaamslocalisatie}")
+                
+                st.markdown("---")
+                
+                # Display results section
+                st.markdown("## Resultaten")
+                
+                if not final_filtered_df.empty:
+                    # Display count
+                    st.markdown(f"**Aantal gevonden records:** {len(final_filtered_df)}")
+                    
+                    # Get relevant information columns
+                    # First check what columns are available as relevant information
+                    relevant_cols = ["DCSPH", df.columns[1], df.columns[2], df.columns[3], df.columns[4], 
+                                    df.columns[5], df.columns[6], df.columns[7], 
+                                    df.columns[8], df.columns[9]]
+                    
+                    # Only include columns that actually exist
+                    available_cols = [col for col in relevant_cols if col in final_filtered_df.columns]
+                    
+                    # Format column names for display
+                    formatted_df = final_filtered_df[available_cols].copy()
+                    
+                    # Ensure DCSPH column is displayed as integer without any formatting
+                    if 'DCSPH' in formatted_df.columns:
+                        # Convert to string first to remove any formatting, then to integer
+                        formatted_df['DCSPH'] = formatted_df['DCSPH'].astype(str).str.replace('.', '').str.replace(',', '')
+                        # Convert back to numeric (as integer)
+                        formatted_df['DCSPH'] = pd.to_numeric(formatted_df['DCSPH'], errors='coerce').fillna(0).astype(int)
+                    
+                    column_mapping = {
+                        "DCSPH": "DCSPH Code",
+                        df.columns[1]: "Lichaamsloc. Code",
+                        df.columns[2]: "Pathologie Code",
+                        df.columns[3]: "Lichaamslocalisatie",
+                        df.columns[4]: "Pathologie",
+                        df.columns[5]: "Status DCSPH",
+                        df.columns[6]: "Omschrijving Pathologieën",
+                        df.columns[7]: "Bekken FT Pathologieën",
+                        df.columns[8]: "Maximale Termijn",
+                        df.columns[9]: "Andere Voorwaarden"
+                    }
+                    formatted_df = formatted_df.rename(columns={col: column_mapping.get(col, col) for col in available_cols})
+                    
+                    # Display the data in a clean table format with horizontal scrolling
+                    # Explicitly format the DCSPH column to display as plain integers without separators
+                    if 'DCSPH Code' in formatted_df.columns:
+                        formatted_df['DCSPH Code'] = formatted_df['DCSPH Code'].apply(lambda x: f"{int(x)}" if pd.notnull(x) else "")
+                    
+                    st.dataframe(
+                        formatted_df, 
+                        use_container_width=True,
+                        hide_index=True,
+                        height=400
+                    )
+                    
+                    # Add save button for the results
+                    if st.button("Sla Resultaten Op", type="primary"):
+                        # Check if DataFrame is already in saved_rows (to avoid duplicates)
+                        if st.session_state.saved_rows.empty:
+                            # If saved_rows is empty, just assign the current DataFrame
+                            st.session_state.saved_rows = final_filtered_df.copy()
+                            st.success("Resultaten zijn opgeslagen. Bekijk ze in de tab 'Opgeslagen Resultaten'.")
+                        else:
+                            # Check if any of these rows are already saved
+                            # For simplicity, we'll check if DCSPH codes are the same
+                            if 'DCSPH' in st.session_state.saved_rows.columns and 'DCSPH' in final_filtered_df.columns:
+                                existing_codes = set(st.session_state.saved_rows['DCSPH'].astype(str))
+                                new_codes = set(final_filtered_df['DCSPH'].astype(str))
+                                
+                                if any(code in existing_codes for code in new_codes):
+                                    st.warning("Sommige resultaten zijn al opgeslagen. Alleen nieuwe resultaten worden toegevoegd.")
+                                    
+                                    # Filter out already saved rows
+                                    new_rows = final_filtered_df[~final_filtered_df['DCSPH'].astype(str).isin(existing_codes)]
+                                    
+                                    if not new_rows.empty:
+                                        # Append only new rows
+                                        st.session_state.saved_rows = pd.concat([st.session_state.saved_rows, new_rows], ignore_index=True)
+                                        st.success(f"{len(new_rows)} nieuwe resultaten opgeslagen.")
+                                    else:
+                                        st.info("Alle resultaten zijn al opgeslagen.")
+                                else:
+                                    # No duplicates, append all rows
+                                    st.session_state.saved_rows = pd.concat([st.session_state.saved_rows, final_filtered_df], ignore_index=True)
+                                    st.success(f"{len(final_filtered_df)} resultaten opgeslagen.")
+                            else:
+                                # If DCSPH column doesn't exist, just append (might cause duplicates)
+                                st.session_state.saved_rows = pd.concat([st.session_state.saved_rows, final_filtered_df], ignore_index=True)
+                                st.success(f"{len(final_filtered_df)} resultaten opgeslagen.")
+                    
+                else:
+                    st.warning("Geen overeenkomende records gevonden met de geselecteerde filters.")
+            
+        # TAB 2: Saved Results
+        with tab2:
+            st.title("Opgeslagen Resultaten")
+            
+            if st.session_state.saved_rows.empty:
+                st.info("Nog geen resultaten opgeslagen. Gebruik de 'Zoeken' tab om resultaten te vinden en op te slaan.")
+            else:
+                # Display count of saved records
+                st.markdown(f"**Aantal opgeslagen records:** {len(st.session_state.saved_rows)}")
+                
+                # Get relevant information columns (same as in tab 1)
                 relevant_cols = ["DCSPH", df.columns[1], df.columns[2], df.columns[3], df.columns[4], 
                                 df.columns[5], df.columns[6], df.columns[7], 
                                 df.columns[8], df.columns[9]]
                 
                 # Only include columns that actually exist
-                available_cols = [col for col in relevant_cols if col in final_filtered_df.columns]
+                available_cols = [col for col in relevant_cols if col in st.session_state.saved_rows.columns]
                 
                 # Format column names for display
-                formatted_df = final_filtered_df[available_cols].copy()
+                formatted_saved_df = st.session_state.saved_rows[available_cols].copy()
                 
                 # Ensure DCSPH column is displayed as integer without any formatting
-                if 'DCSPH' in formatted_df.columns:
-                    # Convert to string first to remove any formatting, then to integer
-                    formatted_df['DCSPH'] = formatted_df['DCSPH'].astype(str).str.replace('.', '').str.replace(',', '')
-                    # Convert back to numeric (as integer)
-                    formatted_df['DCSPH'] = pd.to_numeric(formatted_df['DCSPH'], errors='coerce').fillna(0).astype(int)
+                if 'DCSPH' in formatted_saved_df.columns:
+                    formatted_saved_df['DCSPH'] = formatted_saved_df['DCSPH'].astype(str).str.replace('.', '').str.replace(',', '')
+                    formatted_saved_df['DCSPH'] = pd.to_numeric(formatted_saved_df['DCSPH'], errors='coerce').fillna(0).astype(int)
                 
                 column_mapping = {
                     "DCSPH": "DCSPH Code",
@@ -262,61 +311,33 @@ if os.path.exists(file_path):
                     df.columns[8]: "Maximale Termijn",
                     df.columns[9]: "Andere Voorwaarden"
                 }
-                formatted_df = formatted_df.rename(columns={col: column_mapping.get(col, col) for col in available_cols})
+                formatted_saved_df = formatted_saved_df.rename(columns={col: column_mapping.get(col, col) for col in available_cols})
                 
-                # Display the data in a clean table format with horizontal scrolling
-                # Explicitly format the DCSPH column to display as plain integers without separators
-                if 'DCSPH Code' in formatted_df.columns:
-                    formatted_df['DCSPH Code'] = formatted_df['DCSPH Code'].apply(lambda x: f"{int(x)}" if pd.notnull(x) else "")
+                # Display the saved data
+                if 'DCSPH Code' in formatted_saved_df.columns:
+                    formatted_saved_df['DCSPH Code'] = formatted_saved_df['DCSPH Code'].apply(lambda x: f"{int(x)}" if pd.notnull(x) else "")
                 
                 st.dataframe(
-                    formatted_df, 
+                    formatted_saved_df,
                     use_container_width=True,
                     hide_index=True,
-                    height=400
+                    height=500
                 )
                 
-                # Add save button for the results
-                if st.button("Resultaten Opslaan", type="primary"):
-                    # Create a dictionary with the search criteria and results
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    saved_result = {
-                        "timestamp": timestamp,
-                        "date": date.today().strftime("%d-%m-%Y"),
-                        "omschrijving": selected_omschrijving,
-                        "pathologie": selected_pathologie,
-                        "lichaamslocalisatie": selected_lichaamslocalisatie,
-                        "count": len(final_filtered_df),
-                        "data": final_filtered_df.copy()
-                    }
-                    # Add to saved results
-                    st.session_state.saved_results.append(saved_result)
-                    st.success(f"Resultaten opgeslagen! ({timestamp})")
+                # Add clear button to remove all saved results
+                if st.button("Wis Alle Opgeslagen Resultaten", type="secondary"):
+                    st.session_state.saved_rows = pd.DataFrame()
+                    st.success("Alle opgeslagen resultaten zijn gewist.")
+                    st.rerun()
                 
-            else:
-                st.warning("Geen overeenkomende records gevonden met de geselecteerde filters.")
-        
-            # Display saved results section
-            if st.session_state.saved_results:
-                st.markdown("---")
-                st.markdown("## Opgeslagen Resultaten")
-                
-                # Create a table with saved search criteria
-                saved_data = []
-                for i, result in enumerate(st.session_state.saved_results):
-                    saved_data.append({
-                        "Nummer": i+1,
-                        "Tijd": result["timestamp"],
-                        "Datum": result["date"],
-                        "Omschrijving": result["omschrijving"],
-                        "Pathologie": result["pathologie"],
-                        "Lichaamslocalisatie": result["lichaamslocalisatie"],
-                        "Aantal Records": result["count"]
-                    })
-                
-                saved_df = pd.DataFrame(saved_data)
-                st.dataframe(saved_df, use_container_width=True, hide_index=True)
-        
+                # Add download button for saved results
+                csv = st.session_state.saved_rows[available_cols].to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Opgeslagen Resultaten als CSV",
+                    data=csv,
+                    file_name=f"dcsph_opgeslagen_resultaten_{date.today().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
     else:
         st.error("Kon de gegevens niet laden. Controleer het Excel-bestand.")
         
