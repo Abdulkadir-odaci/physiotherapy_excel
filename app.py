@@ -79,107 +79,59 @@ if os.path.exists(file_path):
             df['DCSPH'] = df['DCSPH'].astype(str).str.replace('.', '').str.replace(',', '')
             # Convert back to numeric (as integer)
             df['DCSPH'] = pd.to_numeric(df['DCSPH'], errors='coerce').fillna(0).astype(int)
+            
+        # Get the column indices for important columns based on our analysis
+        pathologie_col = df.columns[4]  # Text version of pathologie (index 4)
+        omschrijving_path_col = df.columns[6]  # Omschrijving pathologieën column (index 6)
         
-        # SIDEBAR: All filters go here
+        # Fill empty "omschrijving pathologieën" cells with the corresponding "pathologie" text values
+        # First check if the column exists
+        if omschrijving_path_col in df.columns and pathologie_col in df.columns:
+            # For each row, if omschrijving_path is empty, fill it with pathologie text value
+            df[omschrijving_path_col] = df.apply(
+                lambda row: row[pathologie_col] if pd.isna(row[omschrijving_path_col]) or row[omschrijving_path_col] == '' 
+                else row[omschrijving_path_col], 
+                axis=1
+            )
+        
+        # SIDEBAR: Filter based on omschrijving pathologieën column
         with st.sidebar:
             st.title("DCSPH Filters")
             
-            # Step 1: Filter by Omschrijving
-            st.markdown("### 1. Selecteer Omschrijving")
+            # Filter by Omschrijving Pathologieën
+            st.markdown("### Selecteer Omschrijving Pathologieën")
             
-            omschrijving_col = next((col for col in df.columns if col.strip() == "Omschrijving"), None)
-            
-            if not omschrijving_col:
-                st.error("Kolom 'Omschrijving' niet gevonden in het Excel-bestand.")
+            if omschrijving_path_col not in df.columns:
+                st.error(f"Kolom '{omschrijving_path_col}' niet gevonden in het Excel-bestand.")
             else:
-                # Get unique values for Omschrijving dropdown, filtering out None/NaN
-                unique_omschrijving = [val for val in df[omschrijving_col].unique() if pd.notna(val) and val != ""]
-                unique_omschrijving.sort()
+                # Get unique values for Omschrijving Pathologieën dropdown, filtering out None/NaN
+                unique_omschrijving_path = [val for val in df[omschrijving_path_col].unique() if pd.notna(val) and val != ""]
+                unique_omschrijving_path.sort()
                 
-                selected_omschrijving = st.selectbox(
+                selected_omschrijving_path = st.selectbox(
                     "Selecteer een waarde:",
-                    options=unique_omschrijving,
+                    options=unique_omschrijving_path,
                     index=None,
                     placeholder="Selecteer een waarde..."
                 )
                 
-                if selected_omschrijving:
-                    # Filter by the selected Omschrijving for next steps
-                    filtered_by_omschrijving = df[df[omschrijving_col] == selected_omschrijving]
-                    
-                    # Step 2: Filter by pathologie (text version)
-                    st.markdown("### 2. Selecteer Pathologie")
-                    
-                    # Column index 4 contains the text version of pathologie
-                    pathologie_text_col = df.columns[4]  # From our analysis
-                    
-                    if pathologie_text_col not in df.columns:
-                        st.error(f"Kolom voor pathologie tekst niet gevonden.")
-                    else:
-                        # Get unique values for the pathologie dropdown from the filtered data
-                        unique_pathologie = filtered_by_omschrijving[pathologie_text_col].dropna().unique().tolist()
-                        unique_pathologie.sort()
-                        
-                        selected_pathologie = st.selectbox(
-                            "Selecteer een waarde:",
-                            options=unique_pathologie,
-                            index=None,
-                            placeholder="Selecteer een waarde..."
-                        )
-                        
-                        if selected_pathologie:
-                            # Filter by the selected Pathologie for next step
-                            filtered_by_path = filtered_by_omschrijving[
-                                filtered_by_omschrijving[pathologie_text_col] == selected_pathologie
-                            ]
-                            
-                            # Step 3: Filter by lichaamslocalisatie (text version)
-                            st.markdown("### 3. Selecteer Lichaamslocalisatie")
-                            
-                            # Column index 3 contains the text version of lichaamslocalisatie
-                            lichaamslocalisatie_text_col = df.columns[3]  # From our analysis
-                            
-                            if lichaamslocalisatie_text_col not in df.columns:
-                                st.error(f"Kolom voor lichaamslocalisatie tekst niet gevonden.")
-                            else:
-                                # Get unique values for the lichaamslocalisatie dropdown from the filtered data
-                                unique_lichaamslocalisatie = filtered_by_path[lichaamslocalisatie_text_col].dropna().unique().tolist()
-                                unique_lichaamslocalisatie.sort()
-                                
-                                selected_lichaamslocalisatie = st.selectbox(
-                                    "Selecteer een waarde:",
-                                    options=unique_lichaamslocalisatie,
-                                    index=None,
-                                    placeholder="Selecteer een waarde..."
-                                )
-                                
-                                # Reset button at the bottom of sidebar
-                                if st.button("Reset Filters", type="primary", use_container_width=True):
-                                    st.rerun()
+                # Reset button at the bottom of sidebar
+                if st.button("Reset Filters", type="primary", use_container_width=True):
+                    st.rerun()
 
         # TAB 1: Search and Results
         with tab1:
             st.title("DCSPH Gegevens Viewer")
             
-            # Check if all filters are selected to display results
-            if selected_omschrijving and selected_pathologie and selected_lichaamslocalisatie:
-                # Apply all filters to get final results
-                final_filtered_df = df[
-                    (df[omschrijving_col] == selected_omschrijving) & 
-                    (df[pathologie_text_col] == selected_pathologie) &
-                    (df[lichaamslocalisatie_text_col] == selected_lichaamslocalisatie)
-                ]
+            # Check if filter is selected to display results
+            if selected_omschrijving_path:
+                # Apply filter to get final results
+                final_filtered_df = df[df[omschrijving_path_col] == selected_omschrijving_path]
                 
                 # Display filters that were applied
                 st.markdown("## Toegepaste Filters")
                 
-                filter_col1, filter_col2, filter_col3 = st.columns(3)
-                with filter_col1:
-                    st.markdown(f"**Omschrijving:** {selected_omschrijving}")
-                with filter_col2:
-                    st.markdown(f"**Pathologie:** {selected_pathologie}")
-                with filter_col3:
-                    st.markdown(f"**Lichaamslocalisatie:** {selected_lichaamslocalisatie}")
+                st.markdown(f"**Omschrijving Pathologieën:** {selected_omschrijving_path}")
                 
                 st.markdown("---")
                 
@@ -272,6 +224,8 @@ if os.path.exists(file_path):
                     
                 else:
                     st.warning("Geen overeenkomende records gevonden met de geselecteerde filters.")
+            else:
+                st.info("Selecteer een waarde voor Omschrijving Pathologieën in het filtermenu aan de linkerkant om resultaten te zien.")
             
         # TAB 2: Saved Results
         with tab2:
